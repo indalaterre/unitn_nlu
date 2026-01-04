@@ -1,17 +1,11 @@
-import os
 import math
 
-from functools import partial
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.utils.data as data
+from model import *
+from utils import *
 
 from tqdm import tqdm
-
-from model import Language, LanguageModelDataset, LanguageModelLSTM, EarlyStopping
-from utils import download_dataset_if_needed, read_raw_data, get_experiment_config
+from torch.utils.tensorboard import SummaryWriter
 
 
 def train_loop(data, optimizer, criterion, model, clip=5):
@@ -25,8 +19,8 @@ def train_loop(data, optimizer, criterion, model, clip=5):
         output = model(batch['source'])
 
         loss = criterion(output, batch['target'])
+        total_loss += loss.item() * batch['number_tokens']
 
-        total_loss += loss.item()
         total_tokens += batch['number_tokens']
 
         loss.backward()
@@ -34,7 +28,6 @@ def train_loop(data, optimizer, criterion, model, clip=5):
         optimizer.step()
 
     return total_loss / total_tokens
-
 
 @torch.no_grad()
 def eval_loop(data, criterion, model):
@@ -55,108 +48,15 @@ def eval_loop(data, criterion, model):
 
     return ppl, avg_loss
 
-
-def build_optimizer(model, optimizer_name, lr=.001):
-    if optimizer_name.lower() == "sgd":
-        optimizer = optim.SGD(model.parameters(),
-                              lr=lr,
-                              momentum=.9)
-    elif optimizer_name.lower() == "adamw":
-        optimizer = optim.AdamW(model.parameters(), lr=lr)
-    else:
-        raise ValueError(f'Invalid optimizer name {optimizer_name}. Available: sgd, adamw')
-
-    return optimizer
-
-
-def build_data_sources(config, train_batch=64, eval_batch=128):
-    download_dataset_if_needed()
-
-    train_raw = read_raw_data('dataset/ptb.train.txt')
-    val_raw = read_raw_data('dataset/ptb.valid.txt')
-    test_raw = read_raw_data('dataset/ptb.test.txt')
-
-    lang = Language(train_raw,
-                    min_token_freq=config['min_token_freq'],
-                    special_tokens=['<pad>', '<eos>', '<unk>'])
-
-    train_set = LanguageModelDataset(train_raw, lang)
-    val_set = LanguageModelDataset(val_raw, lang)
-    test_set = LanguageModelDataset(test_raw, lang)
-
-    fn = partial(collate_fn, pad_token=lang.get_pad_index())
-    train_ds = data.DataLoader(train_set,
-                               shuffle=True,
-                               collate_fn=fn,
-                               batch_size=train_batch)
-    val_ds = data.DataLoader(val_set,
-                             collate_fn=fn,
-                             batch_size=eval_batch)
-    test_ds = data.DataLoader(test_set,
-                              collate_fn=fn,
-                              batch_size=eval_batch)
-
-    return train_ds, val_ds, test_ds, lang
-
-def init_weights(mat):
-    for m in mat.modules():
-        if type(m) in [nn.GRU, nn.LSTM, nn.RNN]:
-            for name, param in m.named_parameters():
-                if 'weight_ih' in name:
-                    for idx in range(4):
-                        mul = param.shape[0] // 4
-                        torch.nn.init.xavier_uniform_(param[idx * mul:(idx + 1) * mul])
-                elif 'weight_hh' in name:
-                    for idx in range(4):
-                        mul = param.shape[0] // 4
-                        torch.nn.init.orthogonal_(param[idx * mul:(idx + 1) * mul])
-                elif 'bias' in name:
-                    param.data.fill_(0)
-        else:
-            if type(m) in [nn.Linear]:
-                torch.nn.init.uniform_(m.weight, -0.01, 0.01)
-                if m.bias is not None:
-                    m.bias.data.fill_(0.01)
-
-
-def collate_fn(data, pad_token, device='cuda'):
-    def merge(sequences):
-        seq_lengths = [len(seq) for seq in sequences]
-        max_len = 1 if max(seq_lengths) == 0 else max(seq_lengths)
-
-        padded_seqs = torch.LongTensor(len(sequences), max_len).fill_(pad_token)
-        for i, seq in enumerate(sequences):
-            end = seq_lengths[i]
-            padded_seqs[i, :end] = seq
-
-        padded_seqs = padded_seqs.detach()
-        return padded_seqs, seq_lengths
-
-    data.sort(key=lambda x: len(x['source']), reverse=True)
-    new_item = {key: [d[key] for d in data] for key in data[0].keys()}
-
-    source, _ = merge(new_item['source'])
-    target, lengths = merge(new_item['target'])
-
-    new_item['source'] = source.to(device)
-    new_item['target'] = target.to(device)
-    new_item['number_tokens'] = sum(lengths)
-
-    return new_item
-
-def run_experiment(experiment_name, models_dir='models'):
+def run_experiment(experiment_name, experiment, lr, models_dir='models', runs_dir='runs'):
     os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(runs_dir, exist_ok=True)
 
-    experiment = get_experiment_config(experiment_name)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    print(f'Running experiment {experiment_name} on device {device.upper()}')
     print(f'Experiment config: {experiment}')
 
     train_ds, val_ds, test_ds, lang = build_data_sources(experiment)
     pad_index = lang.get_pad_index()
-
-    lr = experiment['lr']
 
     hidden_size = experiment['hidden_size']
     embedding_size = experiment['embedding_size']
@@ -174,12 +74,15 @@ def run_experiment(experiment_name, models_dir='models'):
     optimizer = build_optimizer(lr=lr,
                                 model=model,
                                 optimizer_name=experiment['optimizer_name'])
-    criterion_train = nn.CrossEntropyLoss(ignore_index=pad_index, reduction='sum')
+    criterion_train = nn.CrossEntropyLoss(ignore_index=pad_index)
     criterion_eval = nn.CrossEntropyLoss(ignore_index=pad_index, reduction='sum')
 
     best_val_ppl = math.inf
     num_epochs = experiment['epochs']
     early_stopping = EarlyStopping(patience=experiment['patience'], mode='min')
+
+    # Initialize TensorBoard writer
+    writer = SummaryWriter(log_dir=f'{runs_dir}/{experiment_name}')
 
     pbar = tqdm(range(1, num_epochs))
     for epoch in pbar:
@@ -187,18 +90,20 @@ def run_experiment(experiment_name, models_dir='models'):
 
         val_ppl, val_loss = eval_loop(val_ds, criterion_eval, model)
 
+        # Log metrics to TensorBoard
+        writer.add_scalar('PPL/val', val_ppl, epoch)
+
         pbar.set_description(f'Train Loss={loss:.4f}, Val Loss={val_loss:.4f}, Val PPL={val_ppl:.4f}, LR={lr:.3f}')
         if val_ppl < best_val_ppl:
             best_val_ppl = val_ppl
             torch.save(model.state_dict(), f'{models_dir}/{experiment_name}.pt')
-        else:
-            lr *= 0.5
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
 
         if early_stopping(val_ppl):
             print(f'Early stopping triggered at epoch {epoch}')
             break
+
+    # Close TensorBoard writer
+    writer.close()
 
     model.load_state_dict(torch.load(f'{models_dir}/{experiment_name}.pt'))
 

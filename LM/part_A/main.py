@@ -4,20 +4,25 @@
 # Import everything from functions.py file
 import os
 import math
-from functions import run_experiment
 
-if __name__ == "__main__":
-    # Write the code to load the datasets and to run your functions
-    # Print the results
+from functions import run_experiment, get_experiment_config
+
+def main(experiments):
     models_dir = 'bins'
     os.makedirs(models_dir, exist_ok=True)
 
     best_test_ppl = math.inf
-    experiments = ['vanilla', 'dropout', 'adamw']
 
     for experiment in experiments:
-        test_ppl = run_experiment(experiment, models_dir)
-        if test_ppl < best_test_ppl:
-            best_test_ppl = test_ppl
-            print(f'New best test PPL: {best_test_ppl:.4f}')
+        print('\n\n')
+        experiment_config = get_experiment_config(experiment)
+        lr_array = experiment_config['lr']
+        for lr in lr_array:
+          print(f'Running experiment {experiment} with LR={lr}')
+          test_ppl = run_experiment(experiment, experiment_config, lr, models_dir)
+          print(f'TestPPL for LR {lr} is {test_ppl}')
+          if test_ppl < best_test_ppl:
+              best_test_ppl = test_ppl
+              print(f'New best test PPL: {best_test_ppl:.4f}')
 
+main(['vanilla', 'dropout', 'adamw'])
