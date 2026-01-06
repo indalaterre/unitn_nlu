@@ -19,17 +19,19 @@ class UncertaintyWeighedLoss(nn.Module):
         ## Uncertainty weighting states that the total loss is
         ## 1/var1 * intent_loss + 1/var2 * slots_loss + learnable_w1 + learnable_w2
 
-        ## To avoid 0-divisions we can use the log of the variances
+        ## To avoid 0-divisions and ensure variance is positive we can use the log of the variances
         self.log_vars = nn.Parameter(torch.zeros(learnable_tasks))
 
     def forward(self, losses):
-
         total_loss = 0
         for i, loss in enumerate(losses):
             # 1/var = exp(-log_var)
             total_loss += torch.exp(-self.log_vars[i]) * loss + self.log_vars[i]
 
         return total_loss
+
+    def get_losses_weights(self):
+        return [torch.exp(-self.log_vars[i]).item() for i in range(len(self.log_vars))]
 
 
 class NLUModel(nn.Module):

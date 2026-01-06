@@ -14,6 +14,8 @@ from conll import evaluate
 from model import NLUModel
 from utils import build_data_sources, EarlyStopping
 
+from torch.utils.tensorboard import SummaryWriter
+
 
 def train_loop(data_loader, model, optimizer, loss_fn, clip=5):
     model.train()
@@ -88,8 +90,17 @@ def run_experiment(config):
 
     intent_accuracies, slot_f1_scores = [], []
 
+    writer = None
     for run in range(config['runs']):
         print(f'\nStarting RUN {run + 1}/{config["runs"]}')
+
+        if run == 0:
+            run_name = 'LSTM'
+            if config['use_bidirectional']:
+                run_name += '_bi-directional'
+            if config['dropout'] > 0:
+                run_name += f"_dropout_{config['dropout']}"
+            writer = SummaryWriter(log_dir=f"runs/{run_name}_experiment")
 
         model = NLUModel(emb_dim=config['emb_dim'],
                          hidden_dim=config['hidden_dim'],
@@ -127,6 +138,15 @@ def run_experiment(config):
 
             slots_f1_score = val_s_report['total']['f']
             should_stop, counter, is_best = early_stopping(slots_f1_score)
+
+            if writer:
+                writer.add_scalar('Loss/Validation', val_loss, epoch)
+                writer.add_scalar('Metric/Slot_F1', val_s_report['total']['f'], epoch)
+                writer.add_scalar('Metric/Intent_Accuracy', val_i_report['accuracy'], epoch)
+
+                loss_weights = uncertainty_loss.get_losses_weights()
+                writer.add_scalar('Uncertainty/Weight_Intent', loss_weights[0], epoch)
+                writer.add_scalar('Uncertainty/Weight_Slot', loss_weights[1], epoch)
 
             pbar.set_description(f'Val Loss: {val_loss:.4f}, Slot F1={slots_f1_score:.4f}, Intent ACC: {val_i_report["accuracy"]:.4f}')
 

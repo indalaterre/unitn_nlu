@@ -24,15 +24,15 @@ if __name__ == "__main__":
 
     config = {
         'lr': .0001,
-        'runs': 3,
+        'runs': 5,
         'clip': 5,
         'pad_idx': 0,
         'epochs': 100,
         'patience': 5,
         'emb_dim': 300,
         'hidden_dim': 200,
-        'eval_batch': 256,
-        'train_batch': 128,
+        'eval_batch': 128,
+        'train_batch': 64,
         'models_dir': 'bins',
         'model_name': f'bert-{args.model.lower()}-uncased'
     }
