@@ -148,7 +148,7 @@ def collate_fn(data, pad_token, device='cuda'):
 def run_experiment(experiment_name, models_dir='models'):
     os.makedirs(models_dir, exist_ok=True)
 
-    use_avg_sgd = True if experiment_name == 'avg_sgd' else False
+    use_avg_sgd = True if experiment_name == 'nm_avg_sgd' else False
     dropout = .3 if experiment_name == 'var_dropout' else 0
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -186,6 +186,7 @@ def run_experiment(experiment_name, models_dir='models'):
 
     avg_weights = None
     avg_weights_size = 0
+    avg_trigger_epoch = -1
 
     pbar = tqdm(range(1, num_epochs))
     for epoch in pbar:
@@ -193,29 +194,31 @@ def run_experiment(experiment_name, models_dir='models'):
 
         val_ppl, val_loss = eval_loop(val_ds, criterion_eval, model)
 
-        pbar.set_description(f'Train Loss={loss:.4f}, Val Loss={val_loss:.4f}, Val PPL={val_ppl:.4f}, LR={lr:.3f}')
+        avg_message = '[NM-AvgSGD], ' if avg_weights is not None else ''
+        pbar.set_description(f'{avg_message}Train Loss={loss:.4f}, Val Loss={val_loss:.4f}, Val PPL={val_ppl:.4f}, LR={lr:.3f}')
 
         should_stop, counter, is_best = early_stopping(val_ppl)
         if is_best:
             torch.save(model.state_dict(), f'{models_dir}/{experiment_name}.pt')
-        elif not avg_weights:
-            lr *= 0.5
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
 
-        if avg_weights:
-            avg_weights_size += 1
+        if avg_weights is not None:
+            avg_weights_size +=1
             set_avg_weights(model, avg_weights, avg_weights_size)
 
-        if should_stop:
+            if epoch - avg_trigger_epoch >= experiment['avg_epochs']:
+                print(f'Average weights triggered at epoch {epoch}')
+                break
+        elif should_stop:
             if not use_avg_sgd:
                 print(f'Early stopping triggered at epoch {epoch}')
                 break
-
-            if not avg_weights:
+            else:
                 # Model is not improving anymore. We need to start collecting the weight avg
-                avg_weights_size = 1
+                avg_weights_size = 0
+                avg_trigger_epoch = epoch
                 avg_weights = extract_model_parameters(model)
+
+                early_stopping = EarlyStopping(patience=experiment['patience'], mode='min')
 
 
     if use_avg_sgd and avg_weights:

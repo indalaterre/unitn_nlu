@@ -57,6 +57,3 @@ venv.bak/
 *.fls
 *.fdb_latexmk
 *.bst
-
-# Dataset
-*.txt

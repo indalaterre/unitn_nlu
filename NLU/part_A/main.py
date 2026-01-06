@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     config = {
         'lr': .0001,
-        'runs': 3,
+        'runs': 5,
         'clip': 5,
         'pad_idx': 0,
         'epochs': 100,
@@ -30,8 +30,8 @@ if __name__ == "__main__":
         'hidden_dim': 200,
         'eval_batch': 256,
         'train_batch': 128,
-        'dropout': 0.3 if args.drop else -1,
         'models_dir': 'bins',
+        'dropout': 0.3 if args.drop else -1,
         'use_bidirectional': bool(args.bid)
     }
 

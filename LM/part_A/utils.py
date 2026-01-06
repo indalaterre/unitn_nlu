@@ -129,7 +129,6 @@ def read_raw_data(path, eos_token='<eos>'):
     with open(path, 'r') as f:
         return [f'{line.strip()} {eos_token}' for line in f.readlines()]
 
-
 def get_experiment_config(name):
     configs = {
         'vanilla': {
@@ -223,9 +222,9 @@ def build_optimizer(model, optimizer_name, lr=.001):
 def build_data_sources(config):
     download_dataset_if_needed()
 
-    train_raw = read_raw_data('dataset/ptb.train.txt')
-    val_raw = read_raw_data('dataset/ptb.valid.txt')
-    test_raw = read_raw_data('dataset/ptb.test.txt')
+    train_raw = read_raw_data('../dataset/ptb.train.txt')
+    val_raw = read_raw_data('../dataset/ptb.valid.txt')
+    test_raw = read_raw_data('../dataset/ptb.test.txt')
 
     train_batch = config['train_batch']
     eval_batch = config['eval_batch']

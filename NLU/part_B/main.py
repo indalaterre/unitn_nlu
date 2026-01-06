@@ -2,8 +2,40 @@
 # Please write your fuctions or classes in the functions.py
 
 # Import everything from functions.py file
-from functions import *
+import os
+import argparse
+
+from functions import run_experiment
 
 if __name__ == "__main__":
-    #Wrtite the code to load the datasets and to run your functions
+    # Write the code to load the datasets and to run your functions
     # Print the results
+
+    models_dir = 'bins'
+    os.makedirs(models_dir, exist_ok=True)
+
+    parser = argparse.ArgumentParser(description="Intent and Slot Filling Task")
+    parser.add_argument('--model',
+                        type=str,
+                        default='base',
+                        choices=['base', 'large'],
+                        help='BERT model name [Base, Large]')
+    args = parser.parse_args()
+
+    config = {
+        'lr': .0001,
+        'runs': 3,
+        'clip': 5,
+        'pad_idx': 0,
+        'epochs': 100,
+        'patience': 5,
+        'emb_dim': 300,
+        'hidden_dim': 200,
+        'eval_batch': 256,
+        'train_batch': 128,
+        'models_dir': 'bins',
+        'model_name': f'bert-{args.model.lower()}-uncased'
+    }
+
+    print(f'Running experiment with model {config["model_name"]}')
+    run_experiment(config=config)

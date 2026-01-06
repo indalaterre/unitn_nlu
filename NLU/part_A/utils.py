@@ -15,7 +15,6 @@ def load_json_data(path):
     with open(path, 'r') as f:
         return json.load(f)
 
-
 def create_train_val_test_sets(train_raw, test_raw, factor=.1):
     intents = [x['intent'] for x in train_raw]
     counter = Counter(intents)

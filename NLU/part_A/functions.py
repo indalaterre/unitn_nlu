@@ -8,17 +8,14 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import classification_report
 
+from NLU.part_A.model import UncertaintyWeighedLoss
 from conll import evaluate
 
 from model import NLUModel
 from utils import build_data_sources, EarlyStopping
 
 
-def calculate_cumulative_loss(intent_loss, slot_loss):
-    # TODO: Let's evaluate Uncertainty Weighting
-    return intent_loss + slot_loss
-
-def train_loop(data_loader, model, optimizer, intent_fn, slot_fn, clip=5):
+def train_loop(data_loader, model, optimizer, loss_fn, clip=5):
     model.train()
 
     loss_sum = 0
@@ -27,10 +24,7 @@ def train_loop(data_loader, model, optimizer, intent_fn, slot_fn, clip=5):
 
         slots, intents = model(batch['utterance'], batch['lengths'])
 
-        intent_loss = intent_fn(intents, batch['intents'])
-        slot_loss = slot_fn(slots, batch['slots'])
-
-        total_loss = calculate_cumulative_loss(intent_loss, slot_loss)
+        total_loss = loss_fn((intents, batch['intents']), (slots, batch['slots']))
 
         loss_sum += total_loss.item()
         total_loss.backward()
@@ -41,7 +35,7 @@ def train_loop(data_loader, model, optimizer, intent_fn, slot_fn, clip=5):
     return loss_sum / len(data_loader)
 
 @torch.no_grad()
-def eval_loop(data_loader, model, intent_fn, slot_fn, lang):
+def eval_loop(data_loader, model, loss_fn, lang):
     model.eval()
 
     label_intents, label_slots = [], []
@@ -52,10 +46,7 @@ def eval_loop(data_loader, model, intent_fn, slot_fn, lang):
     for batch in data_loader:
         slots, intents = model(batch['utterance'], batch['lengths'])
 
-        intent_loss = intent_fn(intents, batch['intents'])
-        slot_loss = slot_fn(slots, batch['slots'])
-
-        loss_sum += calculate_cumulative_loss(intent_loss, slot_loss)
+        loss_sum += loss_fn((intents, batch['intents']), (slots, batch['slots']))
 
         label_intents.extend([lang.id2intent[x] for x in batch['intents'].tolist()])
         predicted_intents.extend([lang.id2intent[x] for x in torch.argmax(intents, dim=1).tolist()])
@@ -77,14 +68,13 @@ def eval_loop(data_loader, model, intent_fn, slot_fn, lang):
     try:
         slots_report = evaluate(label_slots, predicted_slots)
     except KeyError as _:
-        slots_report = {"total":{"f":0}}
+        slots_report = {"total": {"f": 0}}
 
     intents_report = classification_report(label_intents, predicted_intents, zero_division=False, output_dict=True)
     return loss_sum / len(data_loader), intents_report, slots_report
 
 
 def run_experiment(config):
-
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     train_loader, val_loader, test_loader, lang = build_data_sources(device=device,
@@ -99,7 +89,7 @@ def run_experiment(config):
     intent_accuracies, slot_f1_scores = [], []
 
     for run in range(config['runs']):
-        print(f'\nStarting RUN {run+1}/{config["runs"]}')
+        print(f'\nStarting RUN {run + 1}/{config["runs"]}')
 
         model = NLUModel(emb_dim=config['emb_dim'],
                          hidden_dim=config['hidden_dim'],
@@ -111,19 +101,34 @@ def run_experiment(config):
                          dropout=config['dropout'],
                          use_bidirectional=config['use_bidirectional']).to(device)
 
-        optimizer = optim.AdamW(model.parameters(), lr=config['lr'])
+        uncertainty_loss = UncertaintyWeighedLoss(learnable_tasks=2).to(device)
+
+        def loss_fn(i_results, s_results):
+            i_loss = criterion_intents(i_results[0], i_results[1])
+            s_loss = criterion_slots(s_results[0], s_results[1])
+            return uncertainty_loss([i_loss, s_loss])
+
+        optimizer = optim.AdamW(list(model.parameters()) + list(uncertainty_loss.parameters()),
+                                lr=config['lr'])
 
         early_stopping = EarlyStopping(patience=config['patience'], mode='max')
 
         pbar = tqdm(range(config['epochs']))
         for epoch in pbar:
-            train_loop(train_loader, model, optimizer, criterion_intents, criterion_slots, clip=config['clip'])
-            val_loss, val_i_report, val_s_report = eval_loop(val_loader, model, criterion_intents, criterion_slots, lang)
+            train_loop(train_loader,
+                       model=model,
+                       loss_fn=loss_fn,
+                       optimizer=optimizer,
+                       clip=config['clip'])
+            val_loss, val_i_report, val_s_report = eval_loop(val_loader,
+                                                             lang=lang,
+                                                             model=model,
+                                                             loss_fn=loss_fn)
 
             slots_f1_score = val_s_report['total']['f']
             should_stop, counter, is_best = early_stopping(slots_f1_score)
 
-            pbar.set_description(f'Slot F1={slots_f1_score:.4f}, Intent ACC: {val_i_report["accuracy"]:.4f}')
+            pbar.set_description(f'Val Loss: {val_loss:.4f}, Slot F1={slots_f1_score:.4f}, Intent ACC: {val_i_report["accuracy"]:.4f}')
 
             if is_best:
                 torch.save(model.state_dict(), f'{config['models_dir']}/nlu.pt')
@@ -133,11 +138,13 @@ def run_experiment(config):
 
         model.load_state_dict(torch.load(f'{config['models_dir']}/nlu.pt'))
 
-        _, test_i_report, test_s_report = eval_loop(test_loader, model, criterion_intents, criterion_slots, lang)
+        _, test_i_report, test_s_report = eval_loop(test_loader,
+                                                    lang=lang,
+                                                    model=model,
+                                                    loss_fn=loss_fn)
 
         slot_f1_scores.append(test_s_report['total']['f'])
         intent_accuracies.append(test_i_report['accuracy'])
-
 
     slot_f1_scores = np.asarray(slot_f1_scores)
     intent_accuracies = np.asarray(intent_accuracies)
@@ -145,4 +152,3 @@ def run_experiment(config):
     print('\n')
     print(f"Slot F1: {slot_f1_scores.mean():.4f} ± {slot_f1_scores.std():.4f}")
     print(f"Intent ACC: {intent_accuracies.mean():.4f} ± {intent_accuracies.std():.4f}")
-

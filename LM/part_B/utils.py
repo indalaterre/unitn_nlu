@@ -35,6 +35,7 @@ def get_experiment_config():
         'train_batch': 128,
         'eval_batch': 256,
         'epochs': 100,
+        'avg_epochs': 50,
         'patience': 5,
         'clip': 5
     }

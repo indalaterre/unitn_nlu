@@ -4,6 +4,34 @@ import torch.nn as nn
 from typing import Tuple
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+class UncertaintyWeighedLoss(nn.Module):
+
+    def __init__(self, learnable_tasks):
+        super(UncertaintyWeighedLoss, self).__init__()
+
+        ## Uncertainty weighting from Kendall/Gal/Cipolla https://arxiv.org/abs/1705.07115
+        ## The goal is the learn the weight for each loss minimizing the overall one
+        ## This class is generic (accounts for a variable number of tasks but let's take our example of 2)
+        ## We have the loss for the intents and the loss for the slots
+        ## Given var1 = variance of intents loss
+        ##       var2 = variance of slots loss
+        ##       learnable_w1 and learnable_w2 are learnable parameters (they act as regularizers)
+        ## Uncertainty weighting states that the total loss is
+        ## 1/var1 * intent_loss + 1/var2 * slots_loss + learnable_w1 + learnable_w2
+
+        ## To avoid 0-divisions we can use the log of the variances
+        self.log_vars = nn.Parameter(torch.zeros(learnable_tasks))
+
+    def forward(self, losses):
+
+        total_loss = 0
+        for i, loss in enumerate(losses):
+            # 1/var = exp(-log_var)
+            total_loss += torch.exp(-self.log_vars[i]) * loss + self.log_vars[i]
+
+        return total_loss
+
+
 class NLUModel(nn.Module):
 
     def __init__(self,
