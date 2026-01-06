@@ -37,6 +37,6 @@ class LanguageModelLSTM(nn.Module):
             self.output.weight = self.embedding.weight
 
     def forward(self, x):
-        data = self.emb_dropout(self.embedding(x))
-        data, _ = self.lstm(data)
-        return self.output(self.out_dropout(data)).permute(0, 2, 1)
+        embeddings = self.emb_dropout(self.embedding(x))
+        lsmt_data, _ = self.lstm(embeddings)
+        return self.output(self.out_dropout(lsmt_data)).permute(0, 2, 1)

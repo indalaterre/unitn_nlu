@@ -16,7 +16,7 @@ if __name__ == "__main__":
     os.makedirs(models_dir, exist_ok=True)
 
     best_test_ppl = math.inf
-    experiments = ['weight_tying', 'var_dropout', 'nm_avg_sgd']
+    experiments = ['weight_tying', 'var_dropout', 'nt_avg_sgd']
 
     for experiment in experiments:
         test_ppl = run_experiment(experiment, models_dir)

@@ -148,7 +148,7 @@ def collate_fn(data, pad_token, device='cuda'):
 def run_experiment(experiment_name, models_dir='models'):
     os.makedirs(models_dir, exist_ok=True)
 
-    use_avg_sgd = True if experiment_name == 'nm_avg_sgd' else False
+    use_avg_sgd = True if experiment_name == 'nt_avg_sgd' else False
     dropout = .3 if experiment_name == 'var_dropout' else 0
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -172,7 +172,7 @@ def run_experiment(experiment_name, models_dir='models'):
                               n_layers=experiment['n_layers'],
                               emb_dropout=dropout,
                               out_dropout=dropout,
-                              tye_weights=True if experiment_name == 'weight_tying' else False).to(device)
+                              tie_weights=True if experiment_name == 'weight_tying' else False).to(device)
     model.apply(init_weights)
 
     optimizer = build_optimizer(lr=lr,

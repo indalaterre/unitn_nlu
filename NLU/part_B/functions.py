@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+import numpy as np
+
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
@@ -166,3 +168,10 @@ def run_experiment(config):
 
         slot_f1_scores.append(test_s_report['total']['f'])
         intent_accuracies.append(test_i_report['accuracy'])
+
+    slot_f1_scores = np.asarray(slot_f1_scores)
+    intent_accuracies = np.asarray(intent_accuracies)
+
+    print('\n')
+    print(f"Slot F1: {slot_f1_scores.mean():.4f} ± {slot_f1_scores.std():.4f}")
+    print(f"Intent ACC: {intent_accuracies.mean():.4f} ± {intent_accuracies.std():.4f}")
