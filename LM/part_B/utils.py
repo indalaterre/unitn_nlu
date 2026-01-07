@@ -1,7 +1,13 @@
 # Add functions or classes used for data loading and preprocessing
 
 import os
+import math
 import urllib.request
+
+from collections import Counter
+
+import torch
+import torch.utils.data as data_utils
 
 def download_dataset_if_needed(dataset_dir = '../dataset'):
 
@@ -31,7 +37,7 @@ def get_experiment_config():
         'emb_dropout': -1,
         'out_dropout': -1,
         'optimizer_name': 'sgd',
-        'lr': 0.0015,
+        'lr': [0.01, 0.02, 0.03],
         'train_batch': 128,
         'eval_batch': 256,
         'epochs': 100,
@@ -113,7 +119,7 @@ class EarlyStopping:
 
         return self.early_stop, self.counter, is_best
 
-class LanguageModelDataset(data.Dataset):
+class LanguageModelDataset(data_utils.Dataset):
 
     def __init__(self, corpus, lang):
 

@@ -51,64 +51,67 @@ Building upon the LSTM baseline, three regularization techniques were implemente
 \textbf{Non-monotonically Triggered Averaged SGD (NT-AvSGD)} is an optimization strategy that begins with standard SGD training and switches to weight averaging when the validation metric fails to improve. Once triggered, the algorithm maintains a running average of model parameters across subsequent epochs, which typically yields smoother convergence and better generalization than the final iterate alone.
 
 \section{Results}
-kk
+
+This study explored various regularization and optimization techniques to improve language modeling performance on the Penn TreeBank corpus. While the baseline LSTM achieved a test perplexity of 157.47 using SGD optimizer, the introduction of advanced regularization techniques in Part B yielded significant improvements.
+
+The combination of Weight Tying and Variational Dropout proved to be the most effective configuration, achieving the lowest test perplexity of \textbf{105.31}, well below the target threshold of 250. Although NT-AvSGD theoretically offers better convergence properties, in our experiments it did not surpass the performance of the Variational Dropout model, likely due to the hyperparameter search space or the limited number of epochs after triggering the averaging phase. Overall, the results highlight the critical importance of weight tying and consistent dropout masks in recurrent neural network training.
 
 \begin{table}[h!]
 	\centering
+	\caption{Result of an LSTM model with dropout and AdamW/SGD optimizers}
+	\label{tab:part1_results}
 	
 	\begin{tabularx}{\columnwidth}{Xcccc}
 		\toprule
 		\textbf{Architecture} & \textbf{LR} & PPL/Val & PPL/Test & Epochs \\
 		
 		\midrule
-		\multirow{3}{=}{LSMT SGD}
+		\multirow{3}{=}{LSTM SGD}
 		& 0.01 & 212.613 & 205.938 & 100 \\
 		& 0.02 & 177.734 & 171.026 & 100 \\
 		& 0.03 & 163.534 & 157.467 & 100 \\
 		
-		\multirow{3}{=}{LSMT SGD drop (p=0.3)}
+		\multirow{3}{=}{LSTM SGD drop ($p=0.3$)}
 		& 0.01 & 240.233 & 232.138 & 100 \\
 		& 0.02 & 197.125 & 189.677 & 100 \\
 		& 0.03 & 178.740 & 171.91  & 100 \\
 		
-		\multirow{3}{=}{LSMT AdamW}
+		\multirow{3}{=}{LSTM AdamW}
 		& 0.0005 & 166.56  & 154.504 & 37 \\
 		& 0.001  & 156.989 & 142.832 & 22 \\
 		& 0.002  & 154.07  & 138.106 & 15 \\
 		
 		\bottomrule
 	\end{tabularx}
-	\caption{Result of an LSTM model with dropout and AdamW/SGD optimizers}
-	\label{tab:part1_results}
 \end{table}
 
 \begin{table}[h!]
 	\centering
+	\caption{Results of an LSTM model with advanced regularization techniques. The start averaging period for NTAvgSGD is shown in parentheses.}
+	\label{tab:part2_results}
 	
 	\begin{tabularx}{\columnwidth}{Xcccc}
 		\toprule
 		\textbf{Architecture} & \textbf{LR} & PPL/Val & PPL/Test & Epochs \\
 		
 		\midrule
-		\multirow{3}{=}{LSMT (WT)}
+		\multirow{3}{=}{LSTM (WT)}
 		& 0.01 & 114.771 & 118.547 & 43  \\
 		& 0.02 & 111.747 & 115.527 & 21 \\
 		& 0.03 & 111.503 & 113.211 & 16 \\
 		
-		\multirow{3}{=}{LSMT (WT, VarDrop)}
+		\multirow{3}{=}{LSTM (WT, VarDrop)}
 		& 0.01 & 109.345 & 113.628 & 91  \\
 		& 0.02 & 110.772 & 105.307 & 51  \\
 		& 0.03 & 113.093 & 116.95  & 34  \\
 		
-		\multirow{3}{=}{LSMT NTAvSGD}
-		& 0.0005 & 109.609 & 113.547 & 100 \\
-		& 0.001  & 111.588 & 112.444 & 100 \\
-		& 0.002  & 113.766 & 113.481 & 100 \\
+		\multirow{3}{=}{LSTM NTAvSGD}
+		& 0.0005 & 109.609 & 113.547 & 100(94) \\
+		& 0.001  & 111.588 & 112.444 & 100(56) \\
+		& 0.002  & 113.766 & 113.481 & 100(53) \\
 		
 		\bottomrule
 	\end{tabularx}
-	\caption{Result of an LSTM model with dropout and AdamW/SGD optimizers}
-	\label{tab:part2_results}
 \end{table}
 
 \bibliographystyle{IEEEtran}

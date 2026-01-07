@@ -1,10 +1,6 @@
-import math
-
 import torch
 import torch.nn as nn
-import torch.utils.data as data
 
-from collections import Counter
 
 class VariationalDropout(nn.Module):
     def __init__(self, dropout=.9):

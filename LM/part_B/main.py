@@ -7,6 +7,7 @@ import os
 import math
 
 from functions import run_experiment
+from utils import get_experiment_config
 
 if __name__ == "__main__":
     # Write the code to load the datasets and to run your functions
@@ -18,8 +19,10 @@ if __name__ == "__main__":
     best_test_ppl = math.inf
     experiments = ['weight_tying', 'var_dropout', 'nt_avg_sgd']
 
+    experiment_config = get_experiment_config()
     for experiment in experiments:
-        test_ppl = run_experiment(experiment, models_dir)
-        if test_ppl < best_test_ppl:
-            best_test_ppl = test_ppl
-            print(f'New best test PPL: {best_test_ppl:.4f}')
+        for lr in experiment_config['lr']:
+            test_ppl = run_experiment(experiment, experiment_config, lr, models_dir)
+            if test_ppl < best_test_ppl:
+                best_test_ppl = test_ppl
+                print(f'New best test PPL: {best_test_ppl:.4f}')

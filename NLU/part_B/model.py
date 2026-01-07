@@ -39,23 +39,26 @@ class NLUBertModel(BertPreTrainedModel):
     def __init__(self,
                  config,
                  out_dims: Tuple[int, int],
-                 dropout=0.1):
+                 dropout=0.1,
+                 freeze_bert=False):
         super(NLUBertModel, self).__init__(config)
 
+        self.bert = BertModel(config)
         # NOTE: I tried to freeze the BERT model as it was a pre-trained one
         # but this impacted on the overall model performance
-        self.bert = BertModel(config)
+        if freeze_bert:
+            for param in self.bert.parameters():
+                param.requires_grad = False
+
         self.dropout = nn.Dropout(dropout)
 
         self.output_intents = nn.Linear(self.config.hidden_size, out_dims[0])
 
         self.output_slots = nn.Linear(self.config.hidden_size, out_dims[1])
 
-    def forward(self, token_ids, attention_mask, token_type_ids):
+    def forward(self, token_ids, attention_mask):
 
-        bert_output = self.bert(token_ids,
-                                attention_mask=attention_mask,
-                                token_type_ids=token_type_ids)
+        bert_output = self.bert(token_ids, attention_mask=attention_mask)
 
         # get the last hidden states for slots and the pooled output for intents
         sequence_output = self.dropout(bert_output.last_hidden_state)

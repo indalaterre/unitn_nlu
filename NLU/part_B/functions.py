@@ -25,7 +25,7 @@ def train_loop(data, model, optimizer, loss_fn, clip=5):
     for batch in data:
         optimizer.zero_grad()
 
-        slots, intents = model(batch['utterance'], batch['attention_mask'], batch['token_type_ids'])
+        slots, intents = model(batch['utterance'], attention_mask=batch['attention_mask'])
 
         total_loss = loss_fn((intents, batch['intents']), (slots, batch['slots']))
         loss_sum += total_loss.item()
@@ -47,7 +47,7 @@ def eval_loop(data, model, loss_fn, tokenizer, lang):
 
     loss_sum = 0
     for batch in data:
-        slots, intents = model(batch['utterance'], batch['attention_mask'], batch['token_type_ids'])
+        slots, intents = model(batch['utterance'], attention_mask=batch['attention_mask'])
 
         total_loss = loss_fn((intents, batch['intents']), (slots, batch['slots']))
         loss_sum += total_loss.item()
@@ -82,7 +82,7 @@ def eval_loop(data, model, loss_fn, tokenizer, lang):
 
     try:
         slots_report = evaluate(label_slots, predicted_slots)
-    except KeyError as ex:
+    except KeyError as _:
         slots_report = {"total": {"f": 0}}
 
     intents_report = classification_report(label_intents, predicted_intents, zero_division=False, output_dict=True)
@@ -120,6 +120,7 @@ def run_experiment(config):
             writer = SummaryWriter(log_dir=f"runs/{config['model_name']}_experiment")
 
         model = NLUBertModel.from_pretrained(config['model_name'],
+                                             freeze_bert=True,
                                              out_dims=(lang.get_intent_len(), lang.get_slot_len())).to(device)
         optimizer = optim.AdamW(list(model.parameters()) + list(uncertainty_loss.parameters()),
                                 lr=config['lr'])
@@ -149,8 +150,10 @@ def run_experiment(config):
                 writer.add_scalar('Metric/Intent_Accuracy', val_i_report['accuracy'], epoch)
 
                 loss_weights = uncertainty_loss.get_losses_weights()
-                writer.add_scalar('Uncertainty/Weight_Intent', loss_weights[0], epoch)
-                writer.add_scalar('Uncertainty/Weight_Slot', loss_weights[1], epoch)
+                writer.add_scalars('Uncertainty/Weights', {
+                    'Intent': loss_weights[0],
+                    'Slot': loss_weights[1]
+                }, epoch)
 
             if is_best:
                 torch.save(model.state_dict(), model_path)

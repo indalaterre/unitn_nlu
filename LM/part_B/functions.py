@@ -149,22 +149,20 @@ def collate_fn(data, pad_token, device='cuda'):
 
     return new_item
 
-def run_experiment(experiment_name, models_dir='models'):
+def run_experiment(experiment_name, experiment, lr, models_dir='models'):
     os.makedirs(models_dir, exist_ok=True)
 
-    use_avg_sgd = True if experiment_name == 'nt_avg_sgd' else False
-    dropout = .3 if experiment_name == 'var_dropout' else 0
+    tie_weights = True
+    use_nt_avg_sgd = True if experiment_name == 'nt_avg_sgd' else False
+    dropout = .3 if experiment_name in ['nt_avg_sgd', 'var_dropout'] else 0
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    experiment = get_experiment_config()
 
     print(f'Running experiment {experiment_name} on device {device.upper()}')
     print(f'Experiment config: {experiment}')
 
     train_ds, val_ds, test_ds, lang = build_data_sources(experiment)
     pad_index = lang.get_pad_index()
-
-    lr = experiment['lr']
 
     hidden_size = experiment['hidden_size']
     embedding_size = experiment['embedding_size']
@@ -176,7 +174,7 @@ def run_experiment(experiment_name, models_dir='models'):
                               n_layers=experiment['n_layers'],
                               emb_dropout=dropout,
                               out_dropout=dropout,
-                              tie_weights=True if experiment_name == 'weight_tying' else False).to(device)
+                              tie_weights=tie_weights).to(device)
     model.apply(init_weights)
 
     optimizer = build_optimizer(lr=lr,
@@ -198,7 +196,7 @@ def run_experiment(experiment_name, models_dir='models'):
 
         val_ppl, val_loss = eval_loop(val_ds, criterion_eval, model)
 
-        avg_message = '[NM-AvgSGD], ' if avg_weights is not None else ''
+        avg_message = f'[NM-AvgSGD: {avg_trigger_epoch}], ' if avg_weights is not None else ''
         pbar.set_description(
             f'{avg_message}Train Loss={loss:.4f}, Val Loss={val_loss:.4f}, Val PPL={val_ppl:.4f}, LR={lr:.3f}')
 
@@ -214,7 +212,7 @@ def run_experiment(experiment_name, models_dir='models'):
                 print(f'Average weights triggered at epoch {epoch}')
                 break
         elif should_stop:
-            if not use_avg_sgd:
+            if not use_nt_avg_sgd:
                 print(f'Early stopping triggered at epoch {epoch}')
                 break
             else:
@@ -225,7 +223,7 @@ def run_experiment(experiment_name, models_dir='models'):
 
                 early_stopping = EarlyStopping(patience=experiment['patience'], mode='min')
 
-    if use_avg_sgd and avg_weights:
+    if use_nt_avg_sgd and avg_weights:
         apply_avg_weights(model, avg_weights)
         torch.save(model.state_dict(), f'{models_dir}/{experiment_name}.pt')
     else:

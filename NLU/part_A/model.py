@@ -90,6 +90,6 @@ class NLUModel(nn.Module):
             last_hidden = last_hidden[-1]
 
         slots = self.output_slots(self.dropout(outputs)).permute(0, 2, 1)
-        intents = self.output_intents(last_hidden)
+        intents = self.output_intents(self.dropout(last_hidden))
 
         return slots, intents

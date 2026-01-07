@@ -77,16 +77,13 @@ def collate_fn(x, device, pad_idx=0):
     src_slots, y_lengths = merge(new_item['slots'])
     src_intents = torch.LongTensor(new_item['intent'])
 
-    token_type_ids = torch.LongTensor([[0 for i in seq] for seq in src_utt])
     attention_mask = torch.LongTensor([[1 if i != pad_idx else 0 for i in seq] for seq in src_utt])
 
     return {'utterance': src_utt.to(device),
             'slots': src_slots.to(device),
             'intents': src_intents.to(device),
-            'token_type_ids': token_type_ids.to(device),
             'attention_mask': attention_mask.to(device),
             'lengths': torch.LongTensor(y_lengths).cpu()}
-
 
 class Language:
 

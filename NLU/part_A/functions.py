@@ -145,8 +145,10 @@ def run_experiment(config):
                 writer.add_scalar('Metric/Intent_Accuracy', val_i_report['accuracy'], epoch)
 
                 loss_weights = uncertainty_loss.get_losses_weights()
-                writer.add_scalar('Uncertainty/Weight_Intent', loss_weights[0], epoch)
-                writer.add_scalar('Uncertainty/Weight_Slot', loss_weights[1], epoch)
+                writer.add_scalars('Uncertainty/Weights', {
+                    'Intent': loss_weights[0],
+                    'Slot': loss_weights[1]
+                }, epoch)
 
             pbar.set_description(f'Val Loss: {val_loss:.4f}, Slot F1={slots_f1_score:.4f}, Intent ACC: {val_i_report["accuracy"]:.4f}')
 
