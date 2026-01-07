@@ -68,12 +68,12 @@ def eval_loop(data, model, loss_fn, tokenizer, lang):
 
             pred_ids = seq.tolist()
 
+            # WordPiece sub-token alignment: only first sub-token of each word has a real label,
+            # additional sub-tokens are padded. We filter to keep only positions with real labels.
             for i, gt_id in enumerate(gt_ids):
-                # Only keep positions where the Gold Label is NOT pad
                 if gt_id != lang.get_pad_index():
                     filtered_gt.append(lang.id2slot[gt_id])
                     filtered_pred.append(lang.id2slot[pred_ids[i]])
-                    # Decode the single token ID to string for reference
                     filtered_tokens.append(tokenizer.decode([utt_ids[i]]))
 
             # Append the aligned lists for ConLL evaluation

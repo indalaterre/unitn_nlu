@@ -82,6 +82,8 @@ class NLUModel(nn.Module):
         # LSTM cell process words one by one updating what it think the intent is up to all the words encountered
         # This is because intent is a sentence level property
         # NOTE: In case of bi-directionality we need to consider both forward/backward states by concatenating them
+        # For bidirectional LSTM: last_hidden shape is (num_layers*2, batch, hidden)
+        # [-2] is the final forward state, [-1] is the final backward state
         if self.lstm.bidirectional:
             last_hidden = torch.cat((last_hidden[-2], last_hidden[-1]), dim=1)
         else:

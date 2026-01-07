@@ -23,6 +23,8 @@ class VariationalDropout(nn.Module):
         if not self.training or self.dropout <= 0:
             return x
 
+        # Shape (batch, 1, features): the middle dim=1 ensures the same mask
+        # is applied across all time steps (sequence length dimension)
         mask = torch.bernoulli(
             torch.ones(x.size(0), 1, x.size(2), device=x.device) * (1 - self.dropout)
         )
@@ -67,4 +69,5 @@ class LanguageModelLSTM(nn.Module):
     def forward(self, x):
         embedded_data = self.emb_dropout(self.embedding(x))
         lstm_data, _ = self.lstm(embedded_data)
+        # Permute from (batch, seq, vocab) to (batch, vocab, seq) for CrossEntropyLoss
         return self.output(self.out_dropout(lstm_data)).permute(0, 2, 1)

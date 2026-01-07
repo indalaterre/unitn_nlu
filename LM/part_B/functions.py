@@ -10,8 +10,9 @@ import torch.utils.data as data
 
 from tqdm import tqdm
 
-from model import Language, LanguageModelDataset, LanguageModelLSTM, EarlyStopping
-from utils import download_dataset_if_needed, read_raw_data, get_experiment_config
+from model import LanguageModelLSTM
+from utils import download_dataset_if_needed, read_raw_data, get_experiment_config, EarlyStopping, Language, \
+    LanguageModelDataset
 
 
 def train_loop(data, optimizer, criterion, model, clip=5):
@@ -99,10 +100,13 @@ def build_data_sources(config, train_batch=64, eval_batch=128):
 
     return train_ds, val_ds, test_ds, lang
 
+
 def init_weights(mat):
     for m in mat.modules():
         if type(m) in [nn.GRU, nn.LSTM, nn.RNN]:
             for name, param in m.named_parameters():
+                # LSTM weights are concatenated for 4 gates: input, forget, cell, output
+                # We initialize each gate's weights separately for better gradient flow
                 if 'weight_ih' in name:
                     for idx in range(4):
                         mul = param.shape[0] // 4
@@ -195,14 +199,15 @@ def run_experiment(experiment_name, models_dir='models'):
         val_ppl, val_loss = eval_loop(val_ds, criterion_eval, model)
 
         avg_message = '[NM-AvgSGD], ' if avg_weights is not None else ''
-        pbar.set_description(f'{avg_message}Train Loss={loss:.4f}, Val Loss={val_loss:.4f}, Val PPL={val_ppl:.4f}, LR={lr:.3f}')
+        pbar.set_description(
+            f'{avg_message}Train Loss={loss:.4f}, Val Loss={val_loss:.4f}, Val PPL={val_ppl:.4f}, LR={lr:.3f}')
 
         should_stop, counter, is_best = early_stopping(val_ppl)
         if is_best:
             torch.save(model.state_dict(), f'{models_dir}/{experiment_name}.pt')
 
         if avg_weights is not None:
-            avg_weights_size +=1
+            avg_weights_size += 1
             set_avg_weights(model, avg_weights, avg_weights_size)
 
             if epoch - avg_trigger_epoch >= experiment['avg_epochs']:
@@ -220,7 +225,6 @@ def run_experiment(experiment_name, models_dir='models'):
 
                 early_stopping = EarlyStopping(patience=experiment['patience'], mode='min')
 
-
     if use_avg_sgd and avg_weights:
         apply_avg_weights(model, avg_weights)
         torch.save(model.state_dict(), f'{models_dir}/{experiment_name}.pt')
@@ -232,13 +236,18 @@ def run_experiment(experiment_name, models_dir='models'):
 
     return test_ppl
 
+
 def extract_model_parameters(model):
-    return {name:param.detach().clone() for name, param in model.named_parameters()}
+    return {name: param.detach().clone() for name, param in model.named_parameters()}
+
 
 def set_avg_weights(model, avg_weights, size):
+    # Incremental averaging: avg_new = avg_old + (1/n) * (x_n - avg_old)
+    # This avoids storing all previous weights and computes running average
     avg_factor = 1 / size
     for name, param in model.named_parameters():
         avg_weights[name] = avg_weights[name] + avg_factor * (param.data - avg_weights[name])
+
 
 def apply_avg_weights(model, avg_weights):
     for name, param in model.named_parameters():
