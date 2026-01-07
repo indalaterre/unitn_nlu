@@ -79,7 +79,7 @@ class NLUModel(nn.Module):
         outputs, _ = pad_packed_sequence(packed_outputs, batch_first=True)
 
         # To get the calculated intent we need to have a look to the final state of the LSTM
-        # LSTM cell process words one by one updating what it think the intent is up to all the words encountered
+        # LSMT cell process words one by one updating what it think the intent is up to all the words encountered
         # This is because intent is a sentence level property
         # NOTE: In case of bi-directionality we need to consider both forward/backward states by concatenating them
         # For bidirectional LSTM: last_hidden shape is (num_layers*2, batch, hidden)
